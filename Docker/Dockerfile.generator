@@ -1,0 +1,14 @@
+# Dockerfile.generator
+FROM python:3.10-slim
+
+WORKDIR /app
+
+# Copier le script Python et le fichier de conf JAAS
+COPY ticket_generator.py .
+COPY kafka_client_jaas.conf .
+
+# Installer kafka-python
+RUN pip install kafka-python==2.0.2
+
+# Commande de lancement : config JAAS + exécution du script
+CMD ["bash", "-c", "export JAVA_TOOL_OPTIONS='-Djava.security.auth.login.config=/app/kafka_client_jaas.conf' && python ticket_generator.py"]
