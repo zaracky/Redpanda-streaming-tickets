@@ -63,32 +63,20 @@ Voici les interfaces disponibles une fois les services lancés :
 
 
 ## 🗂️ Structure du Projet
-.
-├── Docker/
 
-│   ├── Dockerfile.generator
-
-│   ├── Dockerfile.notebook
-
-│   ├── Dockerfile.pyspark
-
-│   └── docker-compose.yml
-
-│   └── docker-compose.yml
-
-│   └── requirements_pyspark.txt
-
-│   └── requirements.txt
-
-├── .env
-
-├── Spark_traitement.py
-
-├── create_ticket.py
-
-├── notebook_analysis.ipynb
-
-├── README.md
+      ├── Docker/
+         ├── Dockerfile.generator        
+         ├── Dockerfile.notebook        
+         ├── Dockerfile.pyspark          
+         ├── docker-compose.yml           
+         └── requirements_pyspark.txt
+         └── requirements_pyspark.txt
+         └── requirements.txt
+      ├── .env
+      ├── Spark_traitement.py
+      ├── create_ticket.py
+      ├── notebook_analysis.ipynb
+      ├── README.md
 
 ## Description des Composants
 - Docker/ : Contient tous les Dockerfiles nécessaires à chaque composant de la pipeline ainsi que le fichier docker-compose.yml pour tout orchestrer.
