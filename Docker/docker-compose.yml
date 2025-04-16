@@ -1,0 +1,253 @@
+services:
+  redpanda-0:
+    command:
+      - redpanda
+      - start
+      - --kafka-addr internal://0.0.0.0:9092,external://0.0.0.0:19092
+      # Address the broker advertises to clients that connect to the Kafka API.
+      # Use the internal addresses to connect to the Redpanda brokers'
+      # from inside the same Docker network.
+      # Use the external addresses to connect to the Redpanda brokers'
+      # from outside the Docker network.
+      - --advertise-kafka-addr internal://redpanda-0:9092,external://localhost:19092
+      - --pandaproxy-addr internal://0.0.0.0:8082,external://0.0.0.0:18082
+      # Address the broker advertises to clients that connect to the HTTP Proxy.
+      - --advertise-pandaproxy-addr internal://redpanda-0:8082,external://localhost:18082
+      - --schema-registry-addr internal://0.0.0.0:8081,external://0.0.0.0:18081
+      # Redpanda brokers use the RPC API to communicate with each other internally.
+      - --rpc-addr redpanda-0:33145
+      - --advertise-rpc-addr redpanda-0:33145
+      # Mode dev-container uses well-known configuration properties for development in containers.
+      - --mode dev-container
+      # Tells Seastar (the framework Redpanda uses under the hood) to use 1 core on the system.
+      - --smp 1
+      - --default-log-level=info
+    image: docker.redpanda.com/redpandadata/redpanda:v24.3.2
+    container_name: redpanda-0
+    volumes:
+      - redpanda-0:/var/lib/redpanda/data
+    networks:
+      - redpanda_network
+    ports:
+      - 18081:18081
+      - 18082:18082
+      - 19092:19092
+      - 19644:9644
+  redpanda-1:
+    command:
+      - redpanda
+      - start
+      - --kafka-addr internal://0.0.0.0:9092,external://0.0.0.0:29092
+      - --advertise-kafka-addr internal://redpanda-1:9092,external://localhost:29092
+      - --pandaproxy-addr internal://0.0.0.0:8082,external://0.0.0.0:28082
+      - --advertise-pandaproxy-addr internal://redpanda-1:8082,external://localhost:28082
+      - --schema-registry-addr internal://0.0.0.0:8081,external://0.0.0.0:28081
+      - --rpc-addr redpanda-1:33145
+      - --advertise-rpc-addr redpanda-1:33145
+      - --mode dev-container
+      - --smp 1
+      - --default-log-level=info
+      - --seeds redpanda-0:33145
+    image: docker.redpanda.com/redpandadata/redpanda:v24.3.2
+    container_name: redpanda-1
+    volumes:
+      - redpanda-1:/var/lib/redpanda/data
+    networks:
+      - redpanda_network
+    ports:
+      - 28081:28081
+      - 28082:28082
+      - 29092:29092
+      - 29644:9644
+    depends_on:
+      - redpanda-0
+  redpanda-2:
+    command:
+      - redpanda
+      - start
+      - --kafka-addr internal://0.0.0.0:9092,external://0.0.0.0:39092
+      - --advertise-kafka-addr internal://redpanda-2:9092,external://localhost:39092
+      - --pandaproxy-addr internal://0.0.0.0:8082,external://0.0.0.0:38082
+      - --advertise-pandaproxy-addr internal://redpanda-2:8082,external://localhost:38082
+      - --schema-registry-addr internal://0.0.0.0:8081,external://0.0.0.0:38081
+      - --rpc-addr redpanda-2:33145
+      - --advertise-rpc-addr redpanda-2:33145
+      - --mode dev-container
+      - --smp 1
+      - --default-log-level=info
+      - --seeds redpanda-0:33145
+    image: docker.redpanda.com/redpandadata/redpanda:v24.3.2
+    container_name: redpanda-2
+    volumes:
+      - redpanda-2:/var/lib/redpanda/data
+    networks:
+      - redpanda_network
+    ports:
+      - 38081:38081
+      - 38082:38082
+      - 39092:39092
+      - 39644:9644
+    depends_on:
+      - redpanda-0
+  console:
+    container_name: redpanda-console
+    image: docker.redpanda.com/redpandadata/console:v2.8.1
+    networks:
+      - redpanda_network
+    entrypoint: /bin/sh
+    command: -c 'echo "$$CONSOLE_CONFIG_FILE" > /tmp/config.yml; /app/console'
+    environment:
+      CONFIG_FILEPATH: /tmp/config.yml
+      CONSOLE_CONFIG_FILE: |
+        kafka:
+          brokers: ["redpanda-0:9092"]
+          schemaRegistry:
+            enabled: true
+            urls: ["http://redpanda-0:8081"]
+        redpanda:
+          adminApi:
+            enabled: true
+            urls: ["http://redpanda-0:9644"]
+    ports:
+      - 8080:8080
+    depends_on:
+      - redpanda-0
+  
+  spark-master:
+    image: bitnami/spark:latest
+    container_name: spark-master
+    environment:
+      # Configuration de base
+      - SPARK_MODE=master
+      # Configuration de la mémoire
+      - SPARK_MASTER_MEMORY=4G               # Mémoire pour le master
+      - SPARK_DAEMON_MEMORY=1G               # Mémoire pour les processus daemon
+      # Paramètres de résilience
+      - SPARK_MASTER_RECOVERY_MODE=ZOOKEEPER # Pour la haute disponibilité
+      - SPARK_MASTER_RECOVERY_DIRECTORY=/recovery
+      - SPARK_NETWORK_TIMEOUT=800s
+      # Paramètres de sécurité
+      - SPARK_RPC_AUTHENTICATION_ENABLED=no
+      - SPARK_RPC_ENCRYPTION_ENABLED=no
+      - SPARK_LOCAL_STORAGE_ENCRYPTION_ENABLED=no
+      - SPARK_SSL_ENABLED=no
+      # Configuration des ports
+      - SPARK_MASTER_PORT=7077
+      - SPARK_MASTER_WEBUI_PORT=8080
+    ports:
+      - "8081:8080"  # Web UI
+      - "7077:7077"  # Master port
+    volumes:
+      - spark_master_data:/recovery
+    networks:
+      - redpanda_network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: 5G
+        reservations:
+          memory: 4G
+
+  spark-worker:
+    image: bitnami/spark:latest
+    container_name: spark-worker
+    environment:
+      - SPARK_MODE=worker
+      - SPARK_MASTER_URL=spark://spark-master:7077
+      # Mémoire et CPU
+      - SPARK_WORKER_MEMORY=4G    # Mémoire totale disponible pour le worker
+      - SPARK_WORKER_CORES=2      # Nombre total de cœurs CPU pour le worker
+      - SPARK_DAEMON_MEMORY=1G    # Mémoire réservée pour les processus daemon Spark
+      - SPARK_EXECUTOR_MEMORY=3G  # Mémoire allouée à chaque exécuteur Spark
+      - SPARK_EXECUTOR_CORES=2    # Nombre de cœurs par exécuteur
+      # Résilience
+      - SPARK_EXECUTOR_HEARTBEAT_INTERVAL=10s             # Fréquence des signaux de vie entre executeur et driver
+      - SPARK_NETWORK_TIMEOUT=800s                        # Délai maximum pour les opérations réseau
+      - SPARK_STORAGE_BLOCKMANAGER_HEARTBEAT_TIMEOUT=900s # Timeout pour le gestionnaire de blocs
+      - SPARK_TASK_MAXFAILURES=4                          # Nombre max de tentatives avant échec définitif
+      - SPARK_SPECULATION=true                            # Relance les tâches lentes sur d'autres executeurs
+      # Partitions
+      - SPARK_DEFAULT_PARALLELISM=8          # Nombre de partitions par défaut pour RDD
+      - SPARK_SQL_SHUFFLE_PARTITIONS=8       # Nombre de partitions pour les opérations shuffle
+      # Sécurité
+      - SPARK_RPC_AUTHENTICATION_ENABLED=no          # Désactive l'authentification RPC
+      - SPARK_RPC_ENCRYPTION_ENABLED=no              # Désactive le chiffrement RPC
+      - SPARK_LOCAL_STORAGE_ENCRYPTION_ENABLED=no    # Désactive le chiffrement du stockage local
+      - SPARK_SSL_ENABLED=no                         # Désactive SSL
+    depends_on:
+      - spark-master
+    networks:
+      - redpanda_network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8081"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: 6G
+          cpus: '2'
+        reservations:
+          memory: 4G
+          cpus: '1'
+
+  python_producer:
+    container_name: python_producer
+    build: 
+      context: .
+      dockerfile: Dockerfile.producer
+    depends_on:
+      - redpanda-0
+      - redpanda-1
+      - redpanda-2
+      - console
+    networks:
+      - redpanda_network
+
+  pyspark_consumer:
+    container_name: pyspark_consumer
+    build:
+      context: .
+      dockerfile: Dockerfile.consumer
+    env_file: ".env"
+    depends_on:
+      - spark-master
+      - redpanda-0
+      - redpanda-1
+      - redpanda-2
+    networks:
+      - redpanda_network
+
+  jupyter-notebook:
+    container_name: jupyter-notebook
+    build:
+      context: .
+      dockerfile: Dockerfile.jupyter
+    ports:
+      - "8888:8888"
+    environment:
+      - JUPYTER_ENABLE_LAB=yes
+      - AWS_ACCESS_KEY_ID=${ACCESS_KEY}
+      - AWS_SECRET_ACCESS_KEY=${SECRET_ACCESS_KEY}
+      - AWS_S3_RESULT_FOLDER=${RESULTS_FOLDER}
+    volumes:
+      - ./notebooks:/home/jovyan/work
+    networks:
+      - redpanda_network
+    depends_on:
+      - spark-master
+
+networks:
+  redpanda_network:
+    driver: bridge
+volumes:
+  redpanda-0: 
+  redpanda-1: 
+  redpanda-2:
+  spark_master_data:
