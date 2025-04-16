@@ -15,6 +15,44 @@ Avant de démarrer, assure-toi d’avoir :
 
 ## 📦 Architecture
 
+Ce diagramme illustre le flux de données complet de la pipeline ETL, depuis la génération des tickets côté producteur jusqu'à leur analyse finale dans un notebook, en passant par Kafka (Redpanda), le traitement PySpark et le stockage dans AWS S3.
+
+
+```mermaid
+flowchart LR
+    create_ticket[create_ticket.py]
+    kafka[(Kafka - Redpanda)]
+    spark[Spark_traitement.py]
+    s3[(AWS S3 - Parquet)]
+    notebook[notebook_analysis.ipynb]
+
+    create_ticket --> kafka
+    kafka --> spark
+    spark --> s3
+    s3 --> notebook
+
+    subgraph Producteur
+        create_ticket
+    end
+
+    subgraph Kafka_Streaming
+        kafka
+    end
+
+    subgraph Traitement_PySpark
+        spark
+    end
+
+    subgraph Stockage_Cloud
+        s3
+    end
+
+    subgraph Analyse
+        notebook
+    end
+```
+
+
 
 ## 🧱 Composants
 - **Redpanda (Kafka-compatible)** : cluster 3 nœuds pour le streaming
