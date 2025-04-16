@@ -1,57 +1,101 @@
-from confluent_kafka import Producer
-import random
-import time
-import json
+import uuid
 from datetime import datetime
-import os
-from dotenv import load_dotenv
+from random import randint, choice
+import json
+import time
+from kafka import KafkaProducer, KafkaAdminClient
+from kafka.admin import NewTopic
+from kafka.errors import KafkaError, TopicAlreadyExistsError
 
-# Charger les variables d'environnement depuis le fichier .env
-load_dotenv()
+# -----------------------------
+# Fonction pour générer un ticket
+# -----------------------------
+def generate_ticket():
+    demandes = ["Issue with the account login", "Forgot my password", "Other", "My computer burned"]
+    priorities = ["High", "Medium", "Low"]
+    demande_types = ["Technical", "Billing", "General Inquiry"]
 
-# Configuration du Producer Kafka avec authentification SASL
-conf = {
-    'bootstrap.servers': os.getenv('KAFKA_BOOTSTRAP_SERVERS'),
-    'security.protocol': os.getenv('KAFKA_SECURITY_PROTOCOL'),
-    'sasl.mechanism': os.getenv('KAFKA_SASL_MECHANISM'),
-    'sasl.username': os.getenv('KAFKA_USERNAME'),
-    'sasl.password': os.getenv('KAFKA_PASSWORD'),
-    'client.id': os.getenv('KAFKA_CLIENT_ID')
-}
+    ticket = {}
+    ticket["ticket_id"] = str(uuid.uuid4())
+    ticket["client_id"] = str(randint(1,1000))
+    now = datetime.now()
+    ticket["demande"] = choice(demandes)
+    ticket["demande_type"] = choice(demande_types)
+    ticket["priority"] = choice(priorities)
+    ticket["create_time"] = now.isoformat()
 
-# Créer un Producteur Kafka avec la configuration
-producer = Producer(conf)
+    return ticket
 
-# Fonction pour générer un ID de ticket
-def generate_ticket_id():
-    return random.randint(1000, 9999)
+# -----------------------------
+# Fonction pour créer un topic si nécessaire
+# -----------------------------
+NUM_PARTITIONS = 3
+REPLICATION_FACTOR = 3
 
-# Fonction pour générer une priorité aléatoire
-def generate_priority():
-    return random.choice(['Low', 'Medium', 'High'])
-
-# Fonction pour produire un message Kafka
-def produce_ticket():
-    ticket = {
-        'ticket_id': generate_ticket_id(),
-        'client_id': random.randint(1, 100),
-        'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-        'request': 'Issue with the account login',
-        'request_type': random.choice(['Technical', 'Billing', 'General Inquiry']),
-        'priority': generate_priority()
-    }
+def create_topic_if_not_exists(topic_name):
+    admin_client = KafkaAdminClient(
+        bootstrap_servers=["redpanda-0:9092", "redpanda-1:9092", "redpanda-2:9092"],
+    )
     
-    ticket_json = json.dumps(ticket)
-    producer.produce('client_tickets', value=ticket_json)
-    producer.flush()
-    print(f"Ticket produit: {ticket_json}")
+    try:
+        topic_list = []
+        topic_list.append(NewTopic(
+            name=topic_name,
+            num_partitions=NUM_PARTITIONS,
+            replication_factor=REPLICATION_FACTOR
+        ))
+        admin_client.create_topics(topic_list)
+        print(f"Topic {topic_name} created successfully")
+    except TopicAlreadyExistsError:
+        print(f"Topic {topic_name} already exists")
+    except Exception as e:
+        print(f"Error creating topic: {e}")
+    finally:
+        admin_client.close()
 
-# Nombre de tickets à produire
-num_tickets = 10
-count = 0
+# -----------------------------
+# Fonction pour envoyer les messages
+# -----------------------------
+def send_messag(topic_name):
+    producer = KafkaProducer(
+        bootstrap_servers=["redpanda-0:9092", "redpanda-1:9092", "redpanda-2:9092"],
+        value_serializer=lambda m: json.dumps(m).encode('ascii'),
+        retries=5
+    )
+    print("Successfully connected to Redpanda cluster")
 
-# Générer les tickets
-while count < num_tickets:
-    produce_ticket()
-    time.sleep(2)
-    count += 1
+    create_topic_if_not_exists(topic_name)
+
+    def on_success(metadata):
+        print(f"Message produced to topic '{metadata.topic}' at offset {metadata.offset}")
+
+    def on_error(e):
+        print(f"Error sending message: {e}")
+
+    try:
+        while True:
+            try:
+                msg = generate_ticket()
+                future = producer.send(topic_name, msg)
+                future.add_callback(on_success)
+                future.add_errback(on_error)
+                producer.flush()
+                time.sleep(1)
+            except KeyboardInterrupt:
+                print("Arrêt du producer...")
+                break
+            except Exception as e:
+                print(f"Erreur: {e}")
+                continue
+    finally:
+        if producer:
+            producer.flush()
+            producer.close()
+
+# -----------------------------
+# Point d'entrée du script
+# -----------------------------
+if __name__ == "__main__":
+    time.sleep(10)  # Temps d'attente au démarrage
+    topic_name = "client_tickets"
+    send_messag(topic_name)
