@@ -1,20 +1,10 @@
-# Dockerfile.pyspark
 FROM bitnami/spark:latest
-
 USER root
-
-# Installer pip
-RUN apt-get update && apt-get install -y python3-pip
-
-# Installer les dépendances directement
-RUN pip install pyspark==3.5.2 boto3==1.35.96
-
-USER 1001
-
+COPY requirements_pyspark.txt .
+RUN pip install --no-cache-dir -r requirements_pyspark.txt
 WORKDIR /app
-
-# Copier le script PySpark
-COPY pyspark_processing.py .
-
-# Lancer le script avec les packages Spark pour Kafka et S3
-CMD ["spark-submit", "--packages", "org.apache.hadoop:hadoop-aws:3.3.2,org.apache.spark:spark-sql-kafka-0-10_2.12:3.1.1", "pyspark_processing.py"]
+COPY /scripts/Spark_traitement.py .
+CMD ["spark-submit", \
+     "--master", "spark://spark-master:7077", \
+     "--packages", "org.apache.spark:spark-sql-kafka-0-10_2.12:3.3.0", \
+     "Spark_traitement.py"]
