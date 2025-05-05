@@ -1,7 +1,7 @@
 # Redpanda-streaming-tickets
 Ce projet met en place une pipeline de traitement de tickets clients en temps réel, basée sur un écosystème **Kafka (Redpanda)**, **Apache Spark Structured Streaming** et **AWS S3**. L’architecture est conteneurisée via **Docker Compose**.
 
-## 📝 Prérequis
+## Prérequis
 
 Avant de démarrer, assure-toi d’avoir :
 
@@ -13,7 +13,7 @@ Avant de démarrer, assure-toi d’avoir :
 
 ---
 
-## 📦 Architecture
+## Architecture
 
 Ce diagramme illustre le flux de données complet de la pipeline ETL, depuis la génération des tickets côté producteur jusqu'à leur analyse finale dans un notebook, en passant par Kafka (Redpanda), le traitement PySpark et le stockage dans AWS S3.
 
@@ -54,7 +54,7 @@ flowchart LR
 
 
 
-## 🧱 Composants
+## Composants
 - **Redpanda (Kafka-compatible)** : cluster 3 nœuds pour le streaming
 
 - **Apache Spark** : cluster 1 master / 1 worker pour le traitement des flux
@@ -67,7 +67,7 @@ flowchart LR
 
 - **Docker Compose** : orchestration complète de l'infrastructure
 
-## 🚀 Lancement du projet
+## Lancement du projet
 1. Cloner le repo
    ```bash
    git clone https://github.com/zaracky/Redpanda-streaming-tickets.git
@@ -90,7 +90,7 @@ Lancer le consumer PySpark (streaming + stockage)
 
 Démarrer Jupyter Notebook pour visualiser les résultats
 
-## 🔍 Accès et Surveillance
+## Accès et Surveillance
 Voici les interfaces disponibles une fois les services lancés :
 
 - Console Redpanda : http://localhost:8080
@@ -100,7 +100,7 @@ Voici les interfaces disponibles une fois les services lancés :
 - Jupyter Notebook : http://localhost:8888
 
 
-## 🗂️ Structure du Projet
+## Structure du Projet
 
       ├── Docker/
          ├── Dockerfile.generator        
